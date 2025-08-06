@@ -19,9 +19,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-      
-      - name: Instalar dependencias del proyecto
-        run: npm install # O el comando de tu gestor de paquetes
 
       # 3. MÓDULO DETECTOR: Ejecutar el linter y guardar los problemas
       - name: Ejecutar linter para detectar deuda técnica
