@@ -1,0 +1,42 @@
+name: Validación de PR del Agente
+
+on:
+  pull_request:
+
+jobs:
+  validate-pr:
+    runs-on: ubuntu-latest
+    # Solo ejecutar si el PR fue creado por el bot
+    if: github.actor == 'my-company-bot'
+    
+    steps:
+      - name: Clonar el código del PR
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          
+      - name: Instalar dependencias
+        run: npm install
+
+      # 1. MÓDULO BUILDER: Compilar el proyecto
+      - name: Compilar el proyecto
+        run: npm run build # O tu comando de compilación
+
+      # 2. MÓDULO RUNNER: Ejecutar los tests
+      - name: Ejecutar tests unitarios y de integración
+        run: npm test
+
+      # 3. Auto-Merge si todo está bien (Opcional y con cuidado)
+      - name: Aprobar y hacer merge del PR si los tests pasan
+        if: success()
+        env:
+          GITHUB_TOKEN: ${{ secrets.BOT_PAT }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          gh pr review "$PR_URL" --approve --body "Todos los tests pasaron. ¡Buen trabajo, bot!"
+          gh pr merge "$PR_URL" --squash --delete-branch --body "Merge automático del PR de deuda técnica."
