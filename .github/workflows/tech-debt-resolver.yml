@@ -1,0 +1,70 @@
+name: Agente Resolutor de Deuda Técnica
+
+# Disparador del workflow: manual (para empezar) o programado
+on:
+  workflow_dispatch: # Permite ejecutarlo manualmente desde la pestaña "Actions"
+  # schedule:
+  #   - cron: '0 2 * * *' # Se ejecuta todos los días a las 2 AM
+
+jobs:
+  resolve-tech-debt:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Checkout del código del repositorio
+      - name: Clonar el repositorio
+        uses: actions/checkout@v4
+
+      # 2. Configurar el entorno (ej: Node.js para un proyecto JS/TS)
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      
+      - name: Instalar dependencias del proyecto
+        run: npm install # O el comando de tu gestor de paquetes
+
+      # 3. MÓDULO DETECTOR: Ejecutar el linter y guardar los problemas
+      - name: Ejecutar linter para detectar deuda técnica
+        run: npx eslint . --format json --output-file eslint-report.json || true
+        # `|| true` evita que el workflow falle si el linter encuentra errores
+
+      # 4. MÓDULO ORQUESTADOR: Un script que lee el informe y actúa
+      - name: Procesar problemas y solicitar correcciones
+        id: orchestrator
+        env:
+          GITHUB_TOKEN: ${{ secrets.BOT_PAT }} # Usamos el token del bot
+          REPO_CONTEXT: ${{ github.repository }}
+        run: |
+          # Este es un script de orquestación simple. Se puede hacer más robusto con Python o JS.
+          ISSUES_FILE="eslint-report.json"
+          
+          if [ ! -f "$ISSUES_FILE" ]; then
+            echo "No se encontró el informe del linter."
+            exit 0
+          fi
+          
+          # Usamos 'jq' para parsear el JSON. Lo instalamos primero.
+          sudo apt-get install -y jq
+          
+          # Iteramos sobre cada problema encontrado
+          jq -c '.[] | .messages[] | {ruleId, message, line, filePath: .filePath}' "$ISSUES_FILE" | while read -r issue; do
+            RULE_ID=$(echo "$issue" | jq -r '.ruleId')
+            MESSAGE=$(echo "$issue" | jq -r '.message')
+            LINE=$(echo "$issue" | jq -r '.line')
+            FILE_PATH=$(echo "$issue" | jq -r '.filePath' | sed "s|$(pwd)/||")
+
+            ISSUE_TITLE="Deuda Técnica: $RULE_ID en $FILE_PATH"
+            ISSUE_BODY="**Archivo:** \`$FILE_PATH\` (Línea: $LINE)\n**Problema:** $MESSAGE\n\n**Instrucción para Copilot:**\nPor favor, refactoriza el código en el archivo \`$FILE_PATH\` en la línea $LINE para solucionar la regla '$RULE_ID'.\n\n_Este issue fue generado automáticamente por el Agente Resolutor de Deuda Técnica._"
+
+            echo "Creando issue en GitHub para: $ISSUE_TITLE"
+            
+            # Usamos la API de GitHub para crear un issue que Copilot pueda tomar
+            gh issue create --title "$ISSUE_TITLE" --body "$ISSUE_BODY" --repo "$REPO_CONTEXT" --label "tech-debt,bot-generated"
+            
+            # En una implementación real, aquí esperaríamos a que Copilot cree un PR
+            # y luego procederíamos con la validación. Por simplicidad, aquí solo creamos el issue.
+          done
+
+      # La siguiente parte del ciclo (compilar, testear, mergear) se manejaría
+      # en un workflow separado que se dispare cuando se cree un Pull Request
+      # con la etiqueta "bot-generated" o por el usuario bot.
