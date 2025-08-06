@@ -15,10 +15,8 @@ jobs:
         uses: actions/checkout@v4
 
       # 2. Configurar el entorno (ej: Node.js para un proyecto JS/TS)
-      - name: Configurar Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+      - name: Configurar la tecnología necesaria para el proyecto
+        
 
       # 3. MÓDULO DETECTOR: Ejecutar el linter y guardar los problemas
       - name: Ejecutar linter para detectar deuda técnica
